@@ -9,6 +9,9 @@ DIM = f'{X}x{Y}'
 
 
 def ip_check(ip_input_str: str):
+    '''
+    Валидация ip адреса
+    '''
     global ERRINPUT
     try:
         ipaddress.ip_interface(ip_input_str)
@@ -26,7 +29,43 @@ def ip_check(ip_input_str: str):
                 msg.append(i)
 
         ERRINPUT = ' '.join(msg)
+        f3.pack_forget()
         return False
+
+
+def private_check(ip):
+    '''
+    Проверка вхождения в приватный пул
+    '''
+    private_nets = ('10.0.0.0/8', '172.16.0.0/12', '169.254.0.0/16', '100.64.0.0/10', '192.168.0.0/16')
+    a = ipaddress.ip_address(ip)
+    for net in private_nets:
+        if a in ipaddress.ip_network(net):
+            return True
+    return False
+
+
+def internet_check(ip):
+    '''
+    Проверка вхождения в Интернет
+    '''
+    non_internet_nets = ('10.0.0.0/8', '172.16.0.0/12', '169.254.0.0/16', '100.64.0.0/10', '192.168.0.0/16', '127.0.0.0/8', '224.0.0.0/4')
+    a = ipaddress.ip_address(ip)
+    return all([a not in ipaddress.ip_network(i) for i in non_internet_nets])
+
+
+def loopback_check(ip):
+    '''
+    Проверка вхождения в пул loopback интерфейсов
+    '''
+    return ipaddress.ip_address(ip) in ipaddress.ip_network('127.0.0.0/8')
+
+
+def multicast_check(ip):
+    '''
+    Проверка вхождения в пул multicast
+    '''
+    return ipaddress.ip_address(ip) in ipaddress.ip_network('224.0.0.0/4')
 
 
 def ipmin(ip_interface):
@@ -50,16 +89,6 @@ def ip_solve(ip_int: ipaddress.ip_interface) -> dict:
             'wildcard': ip_int.hostmask, 'network': ip_int.network[0], 'ipmin': ipmin(ip_int),
             'ipmax': ipmax(ip_int), 'broadcast': ip_int.network[-1], 'hosts': ip_int.network.num_addresses
             }
-    # print(ip_int.ip)
-    # print(ip_int.netmask)
-    # print(ip_int.with_prefixlen.split('/')[-1])
-    # print(ip_int.hostmask)
-    # print(ip_int.network[0])
-    # print(ipmin(ip_int))
-    # print(ipmax(ip_int))
-    # print(ip_int.network[-1])
-    # print(ip_int.network.num_addresses)
-    # print('***************')
 
 
 def set_addr():
@@ -69,6 +98,27 @@ def set_addr():
         ip_data = ip_solve(ipaddress.ip_interface(ip_str))
         ERRINPUT = ''
         errlabel.configure(text=ERRINPUT)
+        f3.pack()
+
+        if private_check(ip_data['ip']):
+            priv_l.pack()
+        else:
+            priv_l.pack_forget()
+
+        if internet_check(ip_data['ip']):
+            int_l.pack()
+        else:
+            int_l.pack_forget()
+
+        if loopback_check(ip_data['ip']):
+            loop_l.pack()
+        else:
+            loop_l.pack_forget()
+
+        if multicast_check(ip_data['ip']):
+            mul_l.pack()
+        else:
+            mul_l.pack_forget()
 
         addrT.configure(state='normal')
         addrT.delete(1.0, END)
@@ -118,6 +168,12 @@ def set_addr():
             errlabel.configure(text=ERRINPUT)
 
 
+def clip_(f):
+    # window.withdraw()
+    window.clipboard_clear()
+    window.clipboard_append(f.get('1.0', END))
+
+
 if __name__ == '__main__':
     window = Tk()
     window.title(PRGNAME)
@@ -125,9 +181,11 @@ if __name__ == '__main__':
     window.resizable(0, 0)
 
     # Frames
-    f1 = LabelFrame(padx=1, pady=1, text='Detail IP Data', width=40)
+    f1 = LabelFrame(padx=1, pady=1, text='Detail IP Data', width=32)
     f2 = Frame(padx=1, pady=1)
-    f3 = LabelFrame(padx=1, pady=1, text='More Info')
+    f3 = LabelFrame(f2, padx=1, pady=1, text='More Info')
+
+    # Little Frames
     f_addr = Frame(f1)
     f_netm = Frame(f1)
     f_pref = Frame(f1)
@@ -137,6 +195,11 @@ if __name__ == '__main__':
     f_hostmx = Frame(f1)
     f_bcast = Frame(f1)
     f_hosts = Frame(f1)
+
+    f_private = Frame(f3)
+    f_internet = Frame(f3)
+    f_loopback = Frame(f3)
+    f_multicast = Frame(f3)
 
     # Labels
     addr = Label(f_addr, text='Address:    ')
@@ -149,8 +212,13 @@ if __name__ == '__main__':
     hosts = Label(f_hosts, text='Hosts:        ')
     errlabel = Label(f2, font=('TkFixedFont', 7), text=ERRINPUT)
 
+    priv_l = Label(f3, text='Private IP Address', width=28, justify='left')
+    int_l = Label(f3, text='Internet IP Address')
+    loop_l = Label(f3, text='Loopback Interface')
+    mul_l = Label(f3, text='Multicast IP Address')
+
     #Text
-    addrT = Text(f_addr, height=1, borderwidth=0, width=15, relief='flat', font=PRGFONTTXT)
+    addrT = Text(f_addr, height=1, borderwidth=0, width=15, relief='flat', font=PRGFONTTXT,)
     netmT = Text(f_netm, height=1, borderwidth=0, width=15, relief='flat', font=PRGFONTTXT)
     wildcT  = Text(f_wildc, height=1, borderwidth=0, width=15, relief='flat', font=PRGFONTTXT)
     netwT = Text(f_netw, height=1, borderwidth=0, width=15, relief='flat', font=PRGFONTTXT)
@@ -164,10 +232,19 @@ if __name__ == '__main__':
 
     # Buttons
     b1 = Button(f2, text='Go!', width=8, justify='left', bd=1, command=set_addr)
+    b_addr_copy = Button(f_addr, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(addrT))
+    b_netm_copy = Button(f_netm, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(netmT))
+    b_wildc_copy = Button(f_wildc, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(wildcT))
+    b_netw_copy = Button(f_netw, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(netwT))
+    b_hostm_copy = Button(f_hostm, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(hostmT))
+    b_hostmx_copy = Button(f_hostmx, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(hostmxT))
+    b_bcast_copy = Button(f_bcast, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(bcastT))
+    b_hosts_copy = Button(f_hosts, text='^',  justify='left', bd=1, padx=1, pady=1, command=lambda: clip_(hostsT))
 
     f1.pack(side='left', fill='both', anchor='nw')
-    f2.pack(side='right', fill='both', anchor='nw')
-    f3.pack(side='right', fill='both', anchor='nw')
+    f2.pack(side='right', anchor='nw')
+    f3.pack(side='bottom')
+
     f_addr.pack(expand=True, anchor='nw')
     f_netm.pack(expand=True, anchor='nw')
     f_wildc.pack(expand=True, anchor='nw')
@@ -177,51 +254,67 @@ if __name__ == '__main__':
     f_bcast.pack(expand=True, anchor='nw')
     f_hosts.pack(expand=True, anchor='nw')
 
+    f_private.pack(expand=True, anchor='nw')
+    f_internet.pack(expand=True, anchor='nw')
+    f_loopback.pack(expand=True, anchor='nw')
+    f_multicast.pack(expand=True, anchor='nw')
+
     field.pack(side='top', fill='x')
     field.focus_set()
-
     b1.pack(side='top')
     errlabel.pack()
+    # priv_l.pack()
+    # int_l.pack()
+    loop_l.pack()
+    # mul_l.pack()
 
     # address
     addr.pack(side='left', anchor='w', )
     addrT.insert(1.0, '127.0.0.1')
     addrT.configure(state='disabled')
-    addrT.pack(side='right', anchor='w', fill='x')
+    addrT.pack(side='left', anchor='w', fill='x')
+    b_addr_copy.pack(side='left', anchor='w')
     # netmask
     netm.pack(side='left', anchor='w')
     netmT.insert(1.0, '255.0.0.0')
     netmT.configure(state='disabled')
-    netmT.pack(side='right', anchor='w', fill='x')
+    netmT.pack(side='left', anchor='w', fill='x')
+    b_netm_copy.pack(side='left', anchor='w')
     # wildcard
     wildc.pack(side='left', anchor='w')
     wildcT.insert(1.0, '0.255.255.255')
     wildcT.configure(state='disabled')
-    wildcT.pack(side='right', anchor='w', fill='x')
+    wildcT.pack(side='left', anchor='w', fill='x')
+    b_wildc_copy.pack(side='left', anchor='w')
     # network
     netw.pack(side='left', anchor='w')
     netwT.insert(1.0, '127.0.0.0')
     netwT.configure(state='disabled')
-    netwT.pack(side='right', anchor='w', fill='x')
+    netwT.pack(side='left', anchor='w', fill='x')
+    b_netw_copy.pack(side='left', anchor='w')
     # hostmin
     hostm.pack(side='left', anchor='w')
     hostmT.insert(1.0, '127.0.0.1')
     hostmT.configure(state='disabled')
-    hostmT.pack(side='right', anchor='w', fill='x')
+    hostmT.pack(side='left', anchor='w', fill='x')
+    b_hostm_copy.pack(side='left', anchor='w')
     # hostmax
     hostmx.pack(side='left', anchor='w')
     hostmxT.insert(1.0, '127.255.255.254')
     hostmxT.configure(state='disabled')
-    hostmxT.pack(side='right', anchor='w', fill='x')
+    hostmxT.pack(side='left', anchor='w', fill='x')
+    b_hostmx_copy.pack(side='left', anchor='w')
     # broadcast
     bcast.pack(side='left', anchor='w')
     bcastT.insert(1.0, '127.255.255.255')
     bcastT.configure(state='disabled')
-    bcastT.pack(side='right', anchor='w', fill='x')
+    bcastT.pack(side='left', anchor='w', fill='x')
+    b_bcast_copy.pack(side='left', anchor='w')
     # hosts
     hosts.pack(side='left', anchor='w')
     hostsT.insert(1.0, '16777214')
     hostsT.configure(state='disabled')
-    hostsT.pack(side='right', anchor='w', fill='x')
+    hostsT.pack(side='left', anchor='w', fill='x')
+    b_hosts_copy.pack(side='left', anchor='w')
 
     window.mainloop()
